@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sys/types.h>    // ssize_t
 #include <sys/socket.h>   // socket, bind, listen, accept
 #include <netinet/in.h>   // sockaddr_in, htons, INADDR_ANY
 #include <unistd.h>       // close
@@ -45,6 +46,20 @@ int main(){
         return 1;
     }
     std::cout << "client connected, client_fd = " << client_fd << "\n";
+
+    // recv
+    char bufer[64];
+    ssize_t n = recv(client_fd, bufer, sizeof(bufer), 0);
+    if (n == -1){
+        std::cerr << "recv: " << std::strerror(errno) << "\n";
+    }
+    else if (n == 0) {
+        std::cout << "client closed connection\n";
+    }
+    else {
+        std::string msg(bufer, n);
+        std::cout << "received: " << msg;
+    }
 
     close(client_fd);
     close(file_descriptor);
