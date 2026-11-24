@@ -59,6 +59,11 @@ int main(){
     else {
         std::string msg(bufer, n);
         std::cout << "received: " << msg;
+        const char* reply = "pong\n";
+        ssize_t sent = send(client_fd, reply, std::strlen(reply), 0);
+        if (sent == -1){
+            std::cerr << "send: " << std::strerror(errno) << "\n";
+        }
     }
 
     close(client_fd);
