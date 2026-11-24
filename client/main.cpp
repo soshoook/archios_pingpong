@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 int main(){
     std::cout << "client started" << "\n";
@@ -34,7 +35,7 @@ int main(){
 
     // send 
     const char* request = "ping\n";
-    ssize_t sent = send(file_descriptor, request, std::strlen(request), 0);
+    ssize_t sent = send(file_descriptor, request, std::strlen(request), MSG_NOSIGNAL); //MSG_NOSIGNAL для возвращения понятной ошибки
     if (sent == -1){
         std::cerr << "send: " << std::strerror(errno) << "\n";
         close(file_descriptor);
@@ -55,6 +56,16 @@ int main(){
         std::string msg(bufer, rec);
         std::cout << "received: " << msg;
     }
+    // timeout 
+    timeval tv;
+    tv.tv_sec = 5;
+    tv.tv_usec = 0;
+    // set socket option               (socket option, receive timeout)
+    if (setsockopt(file_descriptor, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){ 
+        std::cerr << "setcokopt: " << std::strerror(errno) << "\n";
+        close(file_descriptor);
+        return 1;
+    } 
 
     close(file_descriptor);
 }
