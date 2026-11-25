@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <sys/time.h>
 
+enum class State {Compose, WaitingForReply, ReadingReply, HandleError, Done};
+
 int main(){
     std::cout << "client started" << "\n";
 
@@ -44,7 +46,6 @@ int main(){
         return 1;
     } 
 
-    enum class State {Compose, WaitingForReply, ReadingReply, HandleError, Done};
     State state = State::Compose;
 
     const int max_attempts = 3;

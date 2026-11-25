@@ -6,6 +6,8 @@
 #include <cstring>        // memset, strerror
 #include <cerrno>
 
+enum class State {WaitingRequest, HandleRequest, SendingReply, Error, Done};
+
 int main(){
     std::cout << "server started" << "\n";
 
@@ -38,36 +40,87 @@ int main(){
     }
     std::cout << "waiting for a client..." << "\n";
 
-    // accept
-    int client_fd = accept(file_descriptor, nullptr, nullptr);
-    if (client_fd == -1){
-        std::cerr << "accept: " << std::strerror(errno) << "\n";
-        close(file_descriptor);
-        return 1;
-    }
-    std::cout << "client connected, client_fd = " << client_fd << "\n";
+    
 
-    // recv
     char bufer[64];
-    ssize_t n = recv(client_fd, bufer, sizeof(bufer), 0);
-    if (n == -1){
-        std::cerr << "recv: " << std::strerror(errno) << "\n";
-    }
-    else if (n == 0) {
-        std::cout << "client closed connection\n";
-    }
-    else {
-        std::string msg(bufer, n);
-        std::cout << "received: " << msg;
-        const char* reply = "pong\n";
-        ssize_t sent = send(client_fd, reply, std::strlen(reply), 0);
-        if (sent == -1){
-            std::cerr << "send: " << std::strerror(errno) << "\n";
+    while (true){
+        int client_fd = accept(file_descriptor, nullptr, nullptr);
+        if (client_fd == -1){
+            std::cerr << "accept: " << std::strerror(errno) << "\n";
+            continue;
         }
+        // timeout 
+        timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        // set socket option               (socket option, receive timeout)
+        if (setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv)) == -1){ 
+            std::cerr << "setcokopt: " << std::strerror(errno) << "\n";
+            close(client_fd);
+            continue;
+        }
+        
+        State state = State::WaitingRequest;
+        ssize_t rec = 0;
+        std::string msg;
+        std::string error_text;
+
+        while (state != State::Done) {
+            switch (state){
+                case State::WaitingRequest: {
+                    rec = recv(client_fd, bufer, sizeof(bufer), 0);
+                    if (rec > 0){
+                        msg = std::string(bufer, rec);
+                        state = State::HandleRequest;
+                    }
+                    else if (rec == 0){
+                        error_text = "client closed connection";
+                        state = State::Error;
+                    }
+                    else {
+                        if (errno == EAGAIN || errno == EWOULDBLOCK){
+                            error_text = "timeout";
+                        }
+                        else {
+                            error_text = std::strerror(errno);
+                        }
+                        state = State::Error;
+                    }
+                    break;
+                }
+                case State::HandleRequest: {
+                    if (msg == "ping\n"){
+                        std::cout << "received: " << msg;
+                        state = State::SendingReply;
+                    }
+                    else {
+                        error_text = "unexpected message";
+                        state = State::Error;
+                    }
+                    break;
+                }
+                case State::SendingReply: {
+                    ssize_t sent = send(client_fd, "pong\n", 5, MSG_NOSIGNAL);
+                    if (sent == -1){
+                        error_text = std::strerror(errno);
+                        state = State::Error;
+                    }
+                    else {
+                        std::cout << "sent: " << "pong\n";
+                        state = State::Done;
+                    }
+                    break;
+                }
+                case State::Error: {
+                    std::cerr << "client error: " << error_text << "\n";
+                    state = State::Done;
+                    break;
+                }
+                default:
+                    break;
+            }
+        }
+        close(client_fd);
     }
 
-    close(client_fd);
-    close(file_descriptor);
-
-    return 0;
 }
